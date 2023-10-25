@@ -10,8 +10,26 @@ from metaflow import (
 )
 from metaflow.cards import Table, Markdown, Artifact
 
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+# download nltk corpus (first time only)
+import nltk
+nltk.download('all')
+
 # TODO move your labeling function from earlier in the notebook here
 labeling_function = lambda row: 1 if row["rating"] == 5 else 0
+
+# create preprocess_text function
+def preprocess_text(text):
+    tokens = word_tokenize(text.lower())
+    filtered_tokens = [token for token in tokens if token not in stopwords.words('english')]
+    lemmatizer = WordNetLemmatizer()
+    lemmatized_tokens = [lemmatizer.lemmatize(token) for token in filtered_tokens]
+    processed_text = ' '.join(lemmatized_tokens)
+    return processed_text
 
 
 class BaselineNLPFlow(FlowSpec):
@@ -59,10 +77,34 @@ class BaselineNLPFlow(FlowSpec):
     @step
     def baseline(self):
         "Compute the baseline"
+        from sklearn.cross_validation import train_test_split
+        from sklearn.feature_extraction.text import CountVectorizer
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.metrics import accuracy_score, roc_auc_score
+
+        self.df["review_text"] = self.df["review"].apply(lambda x: preprocess_text(x))
+
+        data = self.df["review_text"].tolist()
+        data_labels = self.df["label"].tolist()
+
+        vectorizer = CountVectorizer(
+            analyzer = 'word',
+            lowercase = False,
+        )
+        features = vectorizer.fit_transform(
+            data
+        )
+        features_nd = features.toarray()
+
+        X_train, X_test, y_train, y_test  = train_test_split(features_nd, data_labels, train_size=0.80, random_state=1234)
+
+        log_model = LogisticRegression()
+        log_model = log_model.fit(X=X_train, y=y_train)
+        y_pred = log_model.predict(X_test)         
 
         ### TODO: Fit and score a baseline model on the data, log the acc and rocauc as artifacts.
-        self.base_acc = 0.0
-        self.base_rocauc = 0.0
+        self.base_acc = accuracy_score(y_test, y_pred)
+        self.base_rocauc = roc_auc_score(y_test, y_pred)
 
         self.next(self.end)
 
