@@ -16,8 +16,6 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
 # download nltk corpus (first time only)
-import nltk
-nltk.download('all')
 
 # TODO move your labeling function from earlier in the notebook here
 labeling_function = lambda row: 1 if row["rating"] == 5 else 0
@@ -68,6 +66,7 @@ class BaselineNLPFlow(FlowSpec):
 
         # split the data 80/20, or by using the flow's split-sz CLI argument
         _df = pd.DataFrame({"review": reviews, "label": labels})
+        self.df_working = pd.DataFrame({"review": reviews, "label": labels})
         self.traindf, self.valdf = train_test_split(_df, test_size=self.split_size)
         print(f"num of rows in train set: {self.traindf.shape[0]}")
         print(f"num of rows in validation set: {self.valdf.shape[0]}")
@@ -77,15 +76,16 @@ class BaselineNLPFlow(FlowSpec):
     @step
     def baseline(self):
         "Compute the baseline"
-        from sklearn.cross_validation import train_test_split
+
+        self.df_working["review_text"] = self.df_working["review"].apply(lambda x: preprocess_text(x))
+
+        data = self.df_working["review_text"].tolist()
+        data_labels = self.df_working["label"].tolist()
+
+        from sklearn.model_selection import train_test_split
         from sklearn.feature_extraction.text import CountVectorizer
         from sklearn.linear_model import LogisticRegression
-        from sklearn.metrics import accuracy_score, roc_auc_score
-
-        self.df["review_text"] = self.df["review"].apply(lambda x: preprocess_text(x))
-
-        data = self.df["review_text"].tolist()
-        data_labels = self.df["label"].tolist()
+        from sklearn.metrics import accuracy_score, roc_auc_score        
 
         vectorizer = CountVectorizer(
             analyzer = 'word',
